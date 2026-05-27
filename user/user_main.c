@@ -1288,6 +1288,7 @@ void ICACHE_FLASH_ATTR console_handle_command(struct espconn *pespconn)
         int16_t i;
         struct portmap_table *p;
         ip_addr_t i_ip;
+        enum phy_mode phy;
 
         if (nTokens == 1 || (nTokens == 2 && strcmp(tokens[1], "config") == 0))
         {
@@ -1461,6 +1462,14 @@ void ICACHE_FLASH_ATTR console_handle_command(struct espconn *pespconn)
                 to_console(response);
             }
 #endif
+#if PHY_MODE
+            phy = wifi_get_phy_mode();
+            os_sprintf(response, "Phy mode: %c\r\n", phy == PHY_MODE_11B ? 'b' : phy == PHY_MODE_11G ? 'g' : 'n');
+            to_console(response);
+#endif
+            os_sprintf(response, "Country: %s\r\n",
+                       config.country_code[0] ? config.country_code : "none");
+            to_console(response);
             goto command_handled_2;
         }
 
@@ -1468,7 +1477,6 @@ void ICACHE_FLASH_ATTR console_handle_command(struct espconn *pespconn)
         {
             uint32_t time = (uint32_t)(get_long_systime() / 1000000);
             int16_t i;
-            enum phy_mode phy;
 
             os_sprintf(response, "System uptime: %d:%02d:%02d\r\n", time / 3600, (time % 3600) / 60, time % 60);
             to_console(response);
@@ -1493,11 +1501,6 @@ void ICACHE_FLASH_ATTR console_handle_command(struct espconn *pespconn)
             to_console(response);
 #ifdef USER_GPIO_OUT
             os_sprintf(response, "GPIO output status: %d\r\n", config.gpio_out_status);
-            to_console(response);
-#endif
-#if PHY_MODE
-            phy = wifi_get_phy_mode();
-            os_sprintf(response, "Phy mode: %c\r\n", phy == PHY_MODE_11B ? 'b' : phy == PHY_MODE_11G ? 'g' : 'n');
             to_console(response);
 #endif
             os_sprintf(response, "Free mem: %d\r\n", system_get_free_heap_size());
@@ -2809,6 +2812,24 @@ void ICACHE_FLASH_ATTR console_handle_command(struct espconn *pespconn)
                 goto command_handled;
             }
 #endif
+            if (strcmp(tokens[1], "country") == 0)
+            {
+                if (nTokens < 3 || os_strlen(tokens[2]) != 2)
+                {
+                    os_sprintf_flash(response, "Usage: set country <2-letter-code> (e.g. US, DE, CN)\r\n");
+                }
+                else
+                {
+                    config.country_code[0] = tokens[2][0] >= 'a' && tokens[2][0] <= 'z'
+                                             ? tokens[2][0] - 32 : tokens[2][0];
+                    config.country_code[1] = tokens[2][1] >= 'a' && tokens[2][1] <= 'z'
+                                             ? tokens[2][1] - 32 : tokens[2][1];
+                    config.country_code[2] = '\0';
+                    os_sprintf(response, "Country code set to %s\r\n", config.country_code);
+                }
+                goto command_handled;
+            }
+
             if (strcmp(tokens[1], "max_nat") == 0)
             {
                 config.max_nat = atoi(tokens[2]);
@@ -4564,6 +4585,17 @@ void ICACHE_FLASH_ATTR user_init()
 #if PHY_MODE
     wifi_set_phy_mode(config.phy_mode);
 #endif
+    if ((config.country_code[0] >= 'A' && config.country_code[0] <= 'Z') &&
+        (config.country_code[1] >= 'A' && config.country_code[1] <= 'Z'))
+    {
+        wifi_country_t country;
+        os_memcpy(country.cc, config.country_code, 2);
+        country.cc[2] = '\0';
+        country.schan = 1;
+        country.nchan = 13;
+        country.policy = WIFI_COUNTRY_POLICY_MANUAL;
+        wifi_set_country(&country);
+    }
 
     if (config.my_addr.addr != 0)
     {
