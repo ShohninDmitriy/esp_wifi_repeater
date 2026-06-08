@@ -2804,11 +2804,14 @@ void ICACHE_FLASH_ATTR console_handle_command(struct espconn *pespconn)
             if (strcmp(tokens[1], "phy_mode") == 0)
             {
                 uint16_t mode = atoi(tokens[2]);
-                bool succ = wifi_set_phy_mode(mode);
-                if (succ)
-                    config.phy_mode = mode;
-                os_sprintf(response, "Phy mode setting %s\r\n",
-                           succ ? "successful" : "failed");
+                if (mode < 1 || mode > 3)
+                {
+                    os_sprintf_flash(response, "Invalid phy_mode (1=b, 2=g, 3=n)\r\n");
+                    goto command_handled;
+                }
+                config.phy_mode = mode;
+                config_save(&config);
+                os_sprintf_flash(response, "Phy mode set, reboot to apply\r\n");
                 goto command_handled;
             }
 #endif
